@@ -99,9 +99,6 @@ From the latest generated `outputs/metrics.json`:
 - Dictionary hit rate: **99.53%**
 
 
-### ML Fallback Model Only
-- Accuracy: **0.353175** (**35.32%**)
-
 These two numbers are expected to be different because they evaluate different inference modes.
 
 ## Dataset Coverage and Row Counts
