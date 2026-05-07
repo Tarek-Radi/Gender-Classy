@@ -97,7 +97,7 @@ From the latest generated `outputs/metrics.json`:
 ### Full Hybrid System (Dictionary-first + ML fallback)
 - Accuracy: **0.9971333333333333** (**99.71%**)
 - Dictionary hit rate: **99.53%**
-- ML fallback rate: **0.47%**
+
 
 ### ML Fallback Model Only
 - Accuracy: **0.353175** (**35.32%**)
