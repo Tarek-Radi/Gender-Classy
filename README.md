@@ -1,42 +1,123 @@
-# GenderClassy - Name Gender Predictor
+﻿# GenderClassy
+Professional Streamlit application for predicting gender from names using a hybrid ML pipeline.
 
-## 1. Project Overview
-GenderClassy is a local-first machine learning project that predicts likely gender from names:
-- Male
-- Female
-- Both / Unisex
+## Project Overview
+GenderClassy predicts:
+- `Male`
+- `Female`
+- `Both / Unisex`
 
-It combines:
-- A weighted dictionary lookup built from local WGND + UCI datasets
-- A character-level ML model (TF-IDF + Logistic Regression) as fallback
+It supports:
+- Single-name prediction
+- Batch text prediction
+- CSV/Excel upload and return of the same file with appended prediction columns
 
-## 2. Features
-- Single name prediction with confidence and class probabilities
-- Batch text prediction (new lines, commas, semicolons)
-- CSV/Excel upload with row-wise gender prediction
-- Returns original uploaded data plus appended prediction columns
-- CSV (UTF-8 BOM) and Excel downloads
-- Arabic and Unicode-aware name normalization
-- Friendly UI with model status and error handling
+The project is local-first: it trains only from files in `data/` and does not require external datasets.
 
-## 3. Folder Structure
+## Model and Algorithms
+### Hybrid Inference Engine
+1. Weighted Dictionary Lookup (first stage)
+- Built from merged WGND 2.0 + UCI-style local datasets
+- Aggregates `male`, `female`, and `both` scores per normalized name
+- Uses weighted voting and confidence rules
+
+2. ML Fallback Classifier (second stage)
+- Model name: `Character N-gram Name Gender Classifier`
+- Vectorizer: `TfidfVectorizer(analyzer='char', ngram_range=(2,5), min_df=2, max_features=250000)`
+- Classifier: `LogisticRegression(class_weight='balanced', solver='saga', max_iter=1000)`
+- Classes: `male`, `female`, `both`
+
+3. Mixed Mode
+- If dictionary evidence is present but not strong enough, prediction can blend dictionary + ML signals.
+
+## Latest Training Metrics
+The training pipeline now reports **two separate evaluation modes** in `outputs/metrics.json`:
+
+1. `ml_fallback_model_metrics`
+- Evaluates only the ML classifier (TF-IDF + Logistic Regression)
+- Includes:
+  - accuracy
+  - macro F1
+  - weighted F1
+  - per-class precision/recall/F1
+  - confusion matrix
+
+2. `hybrid_system_metrics`
+- Evaluates the real app logic: **dictionary-first**, then ML fallback
+- Full hybrid system accuracy (Dictionary-first + ML fallback): `0.9971333333333333` -> `99.71%`
+- Includes:
+  - accuracy
+  - macro F1
+  - weighted F1
+  - per-class precision/recall/F1
+  - confusion matrix
+  - dictionary hit rate
+  - ML fallback rate
+
+Important interpretation:
+- The app is designed to use dictionary predictions first when confidence is strong.
+- The ML model is a fallback for names with weak/missing dictionary coverage.
+- Hybrid metrics can be very high on in-catalog names because dictionary coverage is extensive; always inspect fallback rates and per-class behavior.
+- Do not compare this project to high-accuracy demographic classifiers; name-based gender inference is inherently noisy and culturally dependent.
+
+## Tech Stack
+### Core Language
+- Python 3
+
+### Machine Learning and Data
+- pandas
+- numpy
+- scikit-learn
+- joblib
+
+### Web App / UI
+- Streamlit
+- Custom CSS (inside Streamlit app)
+
+### File and Spreadsheet Handling
+- openpyxl
+- xlsxwriter
+- xlrd
+- io.BytesIO
+
+### Utility and Project Tooling
+- pathlib
+- regex / unicode normalization
+- tqdm
+- python-dotenv
+- pyarrow (optional)
+
+## Key Features
+- Single-name prediction with:
+  - gender label
+  - confidence score
+  - male/female/both probabilities
+  - prediction source (`Dictionary`, `ML Model`, `Mixed`)
+  - notes
+- Batch input (newline/comma/semicolon separated names)
+- Upload CSV/XLSX/XLS, choose name column, append predictions, download updated file
+- UTF-8 BOM CSV export for better Arabic compatibility in Excel
+- Unicode-aware preprocessing (English, Arabic, accented names)
+- Friendly error handling and model status indicators
+
+## Project Structure
 ```text
 GenderClassy/
-├── app.py
-├── train_model.py
-├── predict.py
-├── data_loader.py
-├── preprocessing.py
-├── config.py
-├── requirements.txt
-├── README.md
-├── data/
-├── models/
-└── outputs/
+|-- app.py
+|-- train_model.py
+|-- predict.py
+|-- data_loader.py
+|-- preprocessing.py
+|-- config.py
+|-- requirements.txt
+|-- README.md
+|-- data/
+|-- models/
+`-- outputs/
 ```
 
-## 4. Dataset Files Expected
-Place these local files in `data/`:
+## Expected Data Files
+Put these files in `data/`:
 - `name_gender_1950-2018.csv`
 - `name_gender_all.csv`
 - `name_gender_dataset.csv`
@@ -47,62 +128,57 @@ Place these local files in `data/`:
 - `wgnd_2_0_name-gender-langcode.csv`
 - `wgnd_2_0_sources.csv`
 
-Notes:
-- Files with usable name/gender columns are used for training.
-- Metadata-only files are safely skipped with logged reasons.
-
-## 5. Install Dependencies
+## Installation
 ```bash
 pip install -r requirements.txt
 ```
 
-## 6. Train the Model
+## Train the Model
 ```bash
 python train_model.py
 ```
 
-This will:
-- Inspect and log local data schemas
-- Build unified weighted training data
-- Train TF-IDF + Logistic Regression
-- Save artifacts to `models/`
-- Save metrics and report to `outputs/`
+Artifacts saved to `models/`:
+- `gender_model.joblib`
+- `vectorizer.joblib`
+- `label_encoder.joblib`
+- `dictionary_lookup.joblib`
 
-## 7. Run Streamlit App
+Reports saved to `outputs/`:
+- `metrics.json`
+- `training_report.txt`
+
+## Run the Streamlit App
+Use one of the following:
 ```bash
 streamlit run app.py
 ```
+or
+```bash
+python -m streamlit run app.py
+```
 
-## 8. Single-Name Prediction
-In tab **Single Name Prediction**:
-1. Enter one name.
-2. Click **Predict**.
-3. View:
-   - Predicted gender
-   - Confidence
-   - Male/Female/Both probabilities
-   - Prediction source (Dictionary / ML Model / Mixed)
-   - Notes
+## Usage
+### 1) Single Name Prediction
+- Enter one name
+- Click `Predict`
+- Review gender, confidence, probabilities, source, and notes
 
-## 9. Batch Prediction
-In tab **Batch Text Prediction**:
-1. Paste names separated by new lines, commas, or semicolons.
-2. Click **Predict All**.
-3. Download results as CSV or Excel.
+### 2) Batch Text Prediction
+- Paste names separated by new lines, commas, or semicolons
+- Click `Predict All`
+- Download results as CSV/Excel
 
-## 10. CSV/Excel Upload Workflow
-In tab **Upload CSV / Excel**:
-1. Upload `.csv`, `.xlsx`, or `.xls`.
-2. Select the column containing names.
-3. Click **Add Gender Column**.
-4. Download:
-   - `originalfilename_with_gender.csv`
-   - `originalfilename_with_gender.xlsx`
+### 3) Upload CSV / Excel
+- Upload `.csv`, `.xlsx`, or `.xls`
+- Select the name column
+- Click `Add Gender Column`
+- Download:
+  - `originalfilename_with_gender.csv`
+  - `originalfilename_with_gender.xlsx`
 
-Original columns remain unchanged, new columns are appended.
-
-## 11. Output Columns
-Appended prediction columns:
+## Output Columns
+Appended columns for file prediction:
 - `gender`
 - `gender_confidence`
 - `male_probability`
@@ -111,31 +187,22 @@ Appended prediction columns:
 - `prediction_source`
 - `normalized_name`
 
-Batch text output also includes:
+Batch output also includes:
 - `input_name`
 - `notes`
 
-## 12. Model Approach
-- Unicode-safe normalization (`casefold`, punctuation cleanup, first-token extraction)
-- Label standardization to: `male`, `female`, `both`
-- Weighted aggregation by normalized name
-- Conflict resolution with configurable unisex thresholds
-- Dictionary-first inference, ML fallback, and mixed blending when needed
+## Limitations and Responsible Use
+- This is probabilistic inference, not ground truth.
+- Name-gender associations vary by culture, country, language, and time.
+- Many names are truly unisex depending on context.
+- Do not use this tool for sensitive or high-stakes decisions.
 
-## 13. Limitations and Bias Disclaimer
-- This is probabilistic name-based inference, not ground truth.
-- Gender association of names varies by culture, language, and region.
-- Many names are context-dependent or genuinely unisex.
-- Do not use this model for sensitive, legal, medical, hiring, or other high-stakes decisions.
-
-## 14. Troubleshooting
-- **Model files missing**:
-  - Run `python train_model.py` first.
-- **`data/` folder missing or empty**:
-  - Verify local dataset files exist under `data/`.
-- **CSV encoding issues**:
-  - Try UTF-8/UTF-8-BOM input; app attempts fallback encodings automatically.
-- **Large file processing is slow**:
-  - Keep app running; prediction is row-wise and may take time on very large files.
-- **Arabic text appears broken in Excel CSV**:
-  - Use the app CSV download (UTF-8 BOM) or Excel `.xlsx` download.
+## Troubleshooting
+- Model files missing:
+  - Run `python train_model.py`
+- `data/` folder missing or incomplete:
+  - Verify required files are present
+- CSV encoding issues:
+  - Use UTF-8/UTF-8-BOM when possible
+- Large files process slowly:
+  - Wait for completion; prediction is row-wise
