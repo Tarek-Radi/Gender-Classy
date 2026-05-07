@@ -1,104 +1,116 @@
 ﻿# GenderClassy
-Professional Streamlit application for predicting gender from names using a hybrid ML pipeline.
+A production-style Streamlit application for **name-based gender prediction** using a **dictionary-first hybrid system**.
 
-## Project Overview
-GenderClassy predicts:
+## Live Demo
+- Deployed app: [tarek-radi-gender-classy-app-80hycp.streamlit.app](https://tarek-radi-gender-classy-app-80hycp.streamlit.app/)
+
+## Table of Contents
+- [Project Summary](#project-summary)
+- [Core Features](#core-features)
+- [System Architecture](#system-architecture)
+- [Model and Algorithms](#model-and-algorithms)
+- [Evaluation Strategy](#evaluation-strategy)
+- [Latest Metrics](#latest-metrics)
+- [Dataset Coverage and Row Counts](#dataset-coverage-and-row-counts)
+- [Project Structure](#project-structure)
+- [Expected Data Files](#expected-data-files)
+- [Installation](#installation)
+- [Train the Model](#train-the-model)
+- [Run the App](#run-the-app)
+- [How to Use](#how-to-use)
+- [Output Schema](#output-schema)
+- [Tech Stack](#tech-stack)
+- [Limitations and Responsible Use](#limitations-and-responsible-use)
+- [Troubleshooting](#troubleshooting)
+
+## Project Summary
+GenderClassy predicts one of three labels from a name:
 - `Male`
 - `Female`
 - `Both / Unisex`
 
-It supports:
-- Single-name prediction
+The system is designed for practical real-world workflow support:
+- Single name prediction
 - Batch text prediction
 - CSV/Excel upload and return of the same file with appended prediction columns
 
-The project is local-first: it trains only from files in `data/` and does not require external datasets.
+All training uses only local files inside `data/`.
+
+## Core Features
+- Dictionary-first prediction with confidence-based fallback to ML
+- Unicode-aware normalization (English, Arabic, accented names)
+- Batch parsing from new lines, commas, and semicolons
+- CSV/Excel upload and downloadable enriched output
+- UTF-8 BOM CSV export for strong Excel compatibility
+- Robust handling for empty names, nulls, invalid rows, and large files
+- Clean Streamlit UI with model status and dataset visibility
+
+## System Architecture
+1. Data ingestion from multiple local WGND/UCI-style files
+2. Name normalization and label standardization (`male`, `female`, `both`)
+3. Weighted aggregation and conflict resolution by normalized name
+4. Dictionary artifact generation (`dictionary_lookup.joblib`)
+5. ML fallback training (character-level TF-IDF + Logistic Regression)
+6. Inference pipeline:
+   - dictionary-first when confidence is strong
+   - mixed or ML fallback when confidence/coverage is weak
 
 ## Model and Algorithms
-### Hybrid Inference Engine
-1. Weighted Dictionary Lookup (first stage)
-- Built from merged WGND 2.0 + UCI-style local datasets
-- Aggregates `male`, `female`, and `both` scores per normalized name
-- Uses weighted voting and confidence rules
+### Dictionary Layer (Primary Inference)
+- Weighted score aggregation per normalized name:
+  - `male_score`
+  - `female_score`
+  - `both_score`
+- Final label resolution with:
+  - `UNISEX_MARGIN`
+  - `BOTH_THRESHOLD`
+  - `MIN_CONFIDENCE`
 
-2. ML Fallback Classifier (second stage)
+### ML Layer (Fallback Inference)
 - Model name: `Character N-gram Name Gender Classifier`
 - Vectorizer: `TfidfVectorizer(analyzer='char', ngram_range=(2,5), min_df=2, max_features=250000)`
 - Classifier: `LogisticRegression(class_weight='balanced', solver='saga', max_iter=1000)`
 - Classes: `male`, `female`, `both`
 
-3. Mixed Mode
-- If dictionary evidence is present but not strong enough, prediction can blend dictionary + ML signals.
-
-## Latest Training Metrics
-The training pipeline now reports **two separate evaluation modes** in `outputs/metrics.json`:
+## Evaluation Strategy
+The training pipeline reports **two separate evaluation modes** in `outputs/metrics.json`:
 
 1. `ml_fallback_model_metrics`
-- Evaluates only the ML classifier (TF-IDF + Logistic Regression)
-- Includes:
-  - accuracy
-  - macro F1
-  - weighted F1
-  - per-class precision/recall/F1
-  - confusion matrix
+- Isolates the fallback classifier quality
+- Reports accuracy, macro F1, weighted F1, per-class precision/recall/F1, and confusion matrix
 
 2. `hybrid_system_metrics`
-- Evaluates the real app logic: **dictionary-first**, then ML fallback
-- Full hybrid system accuracy (Dictionary-first + ML fallback): `0.9971333333333333` -> `99.71%`
-- Includes:
-  - accuracy
-  - macro F1
-  - weighted F1
-  - per-class precision/recall/F1
-  - confusion matrix
+- Evaluates the actual production behavior (**dictionary-first + ML fallback**)
+- Reports accuracy, macro F1, weighted F1, per-class precision/recall/F1, confusion matrix
+- Also reports:
   - dictionary hit rate
   - ML fallback rate
 
 Important interpretation:
-- The app is designed to use dictionary predictions first when confidence is strong.
-- The ML model is a fallback for names with weak/missing dictionary coverage.
-- Hybrid metrics can be very high on in-catalog names because dictionary coverage is extensive; always inspect fallback rates and per-class behavior.
-- Do not compare this project to high-accuracy demographic classifiers; name-based gender inference is inherently noisy and culturally dependent.
+- The deployed app is **dictionary-first**.
+- The ML model is only a **fallback** for low-confidence or uncovered names.
+- Hybrid accuracy can be very high when dictionary coverage is extensive.
 
-## Tech Stack
-### Core Language
-- Python 3
+## Latest Metrics
+From the latest generated `outputs/metrics.json`:
 
-### Machine Learning and Data
-- pandas
-- numpy
-- scikit-learn
-- joblib
+### Full Hybrid System (Dictionary-first + ML fallback)
+- Accuracy: **0.9971333333333333** (**99.71%**)
+- Dictionary hit rate: **99.53%**
+- ML fallback rate: **0.47%**
 
-### Web App / UI
-- Streamlit
-- Custom CSS (inside Streamlit app)
+### ML Fallback Model Only
+- Accuracy: **0.353175** (**35.32%**)
 
-### File and Spreadsheet Handling
-- openpyxl
-- xlsxwriter
-- xlrd
-- io.BytesIO
+These two numbers are expected to be different because they evaluate different inference modes.
 
-### Utility and Project Tooling
-- pathlib
-- regex / unicode normalization
-- tqdm
-- python-dotenv
-- pyarrow (optional)
-
-## Key Features
-- Single-name prediction with:
-  - gender label
-  - confidence score
-  - male/female/both probabilities
-  - prediction source (`Dictionary`, `ML Model`, `Mixed`)
-  - notes
-- Batch input (newline/comma/semicolon separated names)
-- Upload CSV/XLSX/XLS, choose name column, append predictions, download updated file
-- UTF-8 BOM CSV export for better Arabic compatibility in Excel
-- Unicode-aware preprocessing (English, Arabic, accented names)
-- Friendly error handling and model status indicators
+## Dataset Coverage and Row Counts
+- All files total: **61,711,386** lines
+- Usable training files only: **61,711,124** lines
+- Unified dataset after cleaning/merge/dedup: **4,000,698** rows
+- Rows used to train ML fallback model: **600,000**
+- Train split: **480,000**
+- Test split: **120,000**
 
 ## Project Structure
 ```text
@@ -116,17 +128,6 @@ GenderClassy/
 `-- outputs/
 ```
 
-## Expected Data Files
-Put these files in `data/`:
-- `name_gender_1950-2018.csv`
-- `name_gender_all.csv`
-- `name_gender_dataset.csv`
-- `wgnd_2_0_code-langcode.csv`
-- `wgnd_2_0_name-gender_nocode.csv`
-- `wgnd_2_0_name-gender-code.csv`
-- `wgnd_2_0_name-gender-code_langexp.csv`
-- `wgnd_2_0_name-gender-langcode.csv`
-- `wgnd_2_0_sources.csv`
 
 ## Installation
 ```bash
@@ -138,47 +139,46 @@ pip install -r requirements.txt
 python train_model.py
 ```
 
-Artifacts saved to `models/`:
+Generated artifacts (`models/`):
 - `gender_model.joblib`
 - `vectorizer.joblib`
 - `label_encoder.joblib`
 - `dictionary_lookup.joblib`
 
-Reports saved to `outputs/`:
+Generated reports (`outputs/`):
 - `metrics.json`
 - `training_report.txt`
 
-## Run the Streamlit App
-Use one of the following:
+## Run the App
 ```bash
 streamlit run app.py
 ```
-or
+If `streamlit` is not on PATH:
 ```bash
 python -m streamlit run app.py
 ```
 
-## Usage
+## How to Use
 ### 1) Single Name Prediction
 - Enter one name
 - Click `Predict`
-- Review gender, confidence, probabilities, source, and notes
+- Review prediction label, confidence, probabilities, source, and notes
 
 ### 2) Batch Text Prediction
 - Paste names separated by new lines, commas, or semicolons
 - Click `Predict All`
-- Download results as CSV/Excel
+- Download CSV or Excel
 
 ### 3) Upload CSV / Excel
 - Upload `.csv`, `.xlsx`, or `.xls`
-- Select the name column
+- Select the column containing names
 - Click `Add Gender Column`
-- Download:
+- Download enriched files:
   - `originalfilename_with_gender.csv`
   - `originalfilename_with_gender.xlsx`
 
-## Output Columns
-Appended columns for file prediction:
+## Output Schema
+For uploaded files, these columns are appended:
 - `gender`
 - `gender_confidence`
 - `male_probability`
@@ -187,22 +187,49 @@ Appended columns for file prediction:
 - `prediction_source`
 - `normalized_name`
 
-Batch output also includes:
+Batch predictions also include:
 - `input_name`
 - `notes`
 
+## Tech Stack
+### Language
+- Python 3
+
+### ML and Data
+- pandas
+- numpy
+- scikit-learn
+- joblib
+
+### App/UI
+- Streamlit
+- Custom CSS
+
+### Spreadsheet and File IO
+- openpyxl
+- xlsxwriter
+- xlrd
+- io.BytesIO
+
+### Utilities
+- pathlib
+- regex/unicode normalization
+- tqdm
+- python-dotenv
+- pyarrow (optional)
+
 ## Limitations and Responsible Use
 - This is probabilistic inference, not ground truth.
-- Name-gender associations vary by culture, country, language, and time.
-- Many names are truly unisex depending on context.
-- Do not use this tool for sensitive or high-stakes decisions.
+- Name-gender usage varies by language, culture, country, and time.
+- Some names are genuinely unisex depending on context.
+- Do not use for sensitive, legal, hiring, medical, or high-stakes decisions.
 
 ## Troubleshooting
 - Model files missing:
   - Run `python train_model.py`
-- `data/` folder missing or incomplete:
-  - Verify required files are present
+- `data/` folder missing/incomplete:
+  - Verify expected files exist
 - CSV encoding issues:
-  - Use UTF-8/UTF-8-BOM when possible
-- Large files process slowly:
-  - Wait for completion; prediction is row-wise
+  - Prefer UTF-8/UTF-8-BOM input
+- Large-file runtime is slow:
+  - Keep app running and wait for processing to finish
